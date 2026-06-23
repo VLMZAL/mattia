@@ -2,24 +2,24 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const WebSocket = require("ws");
+const fetch = require("node-fetch");
 
-// Porta Railway o 8080 in locale
 const PORT = process.env.PORT || 8080;
 
-// SERVER HTTP (serve index.html, client.js, style.css)
+const JSONBIN_URL = process.env.JSONBIN_URL;
+const JSONBIN_KEY = process.env.JSONBIN_KEY;
+
+// HTTP SERVER (serve index.html, client.js, style.css)
 const server = http.createServer((req, res) => {
     let filePath = "." + req.url;
-
     if (filePath === "./") filePath = "./index.html";
 
-    const ext = String(path.extname(filePath)).toLowerCase();
-    const mimeTypes = {
+    const ext = path.extname(filePath).toLowerCase();
+    const mime = {
         ".html": "text/html",
         ".js": "text/javascript",
         ".css": "text/css"
-    };
-
-    const contentType = mimeTypes[ext] || "application/octet-stream";
+    }[ext] || "application/octet-stream";
 
     fs.readFile(filePath, (err, content) => {
         if (err) {
@@ -27,20 +27,35 @@ const server = http.createServer((req, res) => {
             res.end("File non trovato");
             return;
         }
-        res.writeHead(200, { "Content-Type": contentType });
-        res.end(content, "utf-8");
+        res.writeHead(200, { "Content-Type": mime });
+        res.end(content);
     });
 });
 
-// SERVER WEBSOCKET
+// WEBSOCKET SERVER
 const wss = new WebSocket.Server({ server });
 
-console.log("Server avviato su PORTA:", PORT);
-
-// UTENTI IN MEMORIA
-const users = []; // { username, password }
-
 let secret = Math.floor(Math.random() * 50) + 1;
+
+// --- JSONBIN FUNCTIONS ---
+async function loadUsers() {
+    const res = await fetch(JSONBIN_URL, {
+        headers: { "X-Master-Key": JSONBIN_KEY }
+    });
+    const data = await res.json();
+    return data.record.users || [];
+}
+
+async function saveUsers(users) {
+    await fetch(JSONBIN_URL, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Master-Key": JSONBIN_KEY
+        },
+        body: JSON.stringify({ users })
+    });
+}
 
 function safeSend(ws, msg) {
     if (ws.readyState === WebSocket.OPEN) ws.send(msg);
@@ -51,24 +66,23 @@ function broadcast(msg) {
 }
 
 wss.on("connection", ws => {
-    console.log("Nuovo client connesso");
-
     ws.logged = false;
     ws.username = null;
 
     safeSend(ws, "Benvenuto! Inserisci nome e password per accedere.");
 
-    ws.on("message", raw => {
+    ws.on("message", async raw => {
         let data;
         try {
             data = JSON.parse(raw);
         } catch {
-            safeSend(ws, "Errore: messaggio non valido");
+            safeSend(ws, "Messaggio non valido");
             return;
         }
 
         // LOGIN
         if (data.type === "login") {
+            const users = await loadUsers();
             const existing = users.find(u => u.username === data.username);
 
             if (!existing) {
@@ -76,6 +90,7 @@ wss.on("connection", ws => {
                     username: data.username,
                     password: data.password
                 });
+                await saveUsers(users);
 
                 ws.logged = true;
                 ws.username = data.username;
@@ -94,7 +109,7 @@ wss.on("connection", ws => {
             return;
         }
 
-        // BLOCCA CHI NON È LOGGATO
+        // BLOCCA NON LOGGATI
         if (!ws.logged) {
             safeSend(ws, "Devi prima fare login");
             return;
@@ -114,11 +129,8 @@ wss.on("connection", ws => {
             }
         }
     });
-
-    ws.on("close", () => console.log("Client disconnesso"));
 });
 
-// AVVIO SERVER HTTP + WS
 server.listen(PORT, () => {
-    console.log("HTTP + WebSocket attivi su PORTA:", PORT);
+    console.log("Server attivo su porta", PORT);
 });

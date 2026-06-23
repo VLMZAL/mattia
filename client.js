@@ -17,25 +17,17 @@ function connect() {
     ws = new WebSocket(getWsUrl());
 
     ws.onopen = () => addLog("Connesso al server");
-
     ws.onmessage = msg => addLog(msg.data);
-
     ws.onclose = () => {
         addLog("Connessione chiusa, ritento tra 1s...");
         setTimeout(connect, 1000);
     };
-
     ws.onerror = () => addLog("Errore WebSocket");
 }
 
 connect();
 
 function login() {
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-        addLog("Connessione non aperta");
-        return;
-    }
-
     const user = document.getElementById("username").value;
     const pass = document.getElementById("password").value;
 
@@ -47,11 +39,6 @@ function login() {
 }
 
 function sendGuess() {
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-        addLog("Connessione non aperta");
-        return;
-    }
-
     const val = document.getElementById("guess").value;
 
     ws.send(JSON.stringify({
