@@ -1,5 +1,4 @@
 let ws;
-let ws;
 
 function addLog(text) {
     const log = document.getElementById("log");
@@ -15,8 +14,7 @@ function getWsUrl() {
 }
 
 function connect() {
-    const url = getWsUrl();
-    ws = new WebSocket(url);
+    ws = new WebSocket(getWsUrl());
 
     ws.onopen = () => addLog("Connesso al server");
 
@@ -41,11 +39,6 @@ function login() {
     const user = document.getElementById("username").value;
     const pass = document.getElementById("password").value;
 
-    if (!user || !pass) {
-        addLog("Inserisci nome e password");
-        return;
-    }
-
     ws.send(JSON.stringify({
         type: "login",
         username: user,
@@ -60,11 +53,6 @@ function sendGuess() {
     }
 
     const val = document.getElementById("guess").value;
-
-    if (!val) {
-        addLog("Inserisci un numero");
-        return;
-    }
 
     ws.send(JSON.stringify({
         type: "guess",

@@ -1,9 +1,41 @@
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const WebSocket = require("ws");
 
+// Porta Railway o 8080 in locale
 const PORT = process.env.PORT || 8080;
-const wss = new WebSocket.Server({ port: PORT });
 
-console.log("Server WebSocket avviato su ws://localhost:" + PORT);
+// SERVER HTTP (serve index.html, client.js, style.css)
+const server = http.createServer((req, res) => {
+    let filePath = "." + req.url;
+
+    if (filePath === "./") filePath = "./index.html";
+
+    const ext = String(path.extname(filePath)).toLowerCase();
+    const mimeTypes = {
+        ".html": "text/html",
+        ".js": "text/javascript",
+        ".css": "text/css"
+    };
+
+    const contentType = mimeTypes[ext] || "application/octet-stream";
+
+    fs.readFile(filePath, (err, content) => {
+        if (err) {
+            res.writeHead(404);
+            res.end("File non trovato");
+            return;
+        }
+        res.writeHead(200, { "Content-Type": contentType });
+        res.end(content, "utf-8");
+    });
+});
+
+// SERVER WEBSOCKET
+const wss = new WebSocket.Server({ server });
+
+console.log("Server avviato su PORTA:", PORT);
 
 // UTENTI IN MEMORIA
 const users = []; // { username, password }
@@ -11,9 +43,7 @@ const users = []; // { username, password }
 let secret = Math.floor(Math.random() * 50) + 1;
 
 function safeSend(ws, msg) {
-    if (ws.readyState === WebSocket.OPEN) {
-        ws.send(msg);
-    }
+    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
 }
 
 function broadcast(msg) {
@@ -85,7 +115,10 @@ wss.on("connection", ws => {
         }
     });
 
-    ws.on("close", () => {
-        console.log("Client disconnesso");
-    });
+    ws.on("close", () => console.log("Client disconnesso"));
+});
+
+// AVVIO SERVER HTTP + WS
+server.listen(PORT, () => {
+    console.log("HTTP + WebSocket attivi su PORTA:", PORT);
 });
